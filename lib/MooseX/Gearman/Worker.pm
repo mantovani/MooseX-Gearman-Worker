@@ -82,42 +82,12 @@ sub init {
     $self->register_function;
 }
 
-before 'get_class' => sub {
+sub get_class {
     my $self = shift;
     eval { Class::MOP::load_class( $self->class_name, $self->class_params ); };
     die $@ if $@;
     $self->metaclass( Class::MOP::get_metaclass_by_name( $self->class_name ) );
-};
-
-=head2 get_class
-
-Load the class and get the metaclass of the class.
-
-=cut
-
-sub get_class {
-    my $self = shift;
-    $self->class_methods( $self->_get_class_methods( $self->metaclass ) );
 }
-
-=head2 get_class_methods
-
-Return all methods of the class.
-
-=cut
-
-sub _get_class_methods {
-    my ( $self, $metaclass ) = @_;
-    my @methods = $metaclass->get_all_methods;
-    my @class_methods;
-    foreach my $method (@methods) {
-        push @class_methods, $method
-          if $method->original_package_name eq $self->class_name;
-    }
-    \@class_methods;
-}
-
-# WORKING ON IT
 
 before 'register_function' => sub {
     my $self = shift;
@@ -127,13 +97,22 @@ before 'register_function' => sub {
 
 sub register_function {
     my $self = shift;
-    foreach my $method ( $self->class_methods ) {
-        $self->gearman_worker->add_function( $method->name, 0, $method->body,
-            0 );
-    }
-
-    my $ret = $self->gearman_worker->add_function( "reverse", 0, \&_unserialization, 0 );
-
+    $self->gearman_worker->add_function(
+        "init_worker",
+        0,
+        sub {
+            my $arg = $self->unserialization( shift->workload );
+            return $self->serialization(
+                $self->metaclass->find_method_by_name( $arg->{method} )
+                  ->execute(
+                    $self->metaclass->find_method_by_name('new')
+                      ->execute( $self->class_name, $self->class_params ),
+                    $arg->{args}
+                  )
+            );
+        },
+        0
+    );
 }
 
 after 'register_function' => sub {
@@ -147,22 +126,14 @@ after 'register_function' => sub {
     }
 };
 
-# AND IT
-sub _unserialization {
-    use Data::Dumper;
-    print Dumper @_;
+sub unserialization {
+    my ( $self, $json ) = @_;
+    return decode_json $json;
 }
 
-sub reverse {
-    my $job = shift;
-
-    my $workload = $job->workload();
-    my $result   = reverse($workload);
-
-    printf( "Job=%s Function_Name=%s Workload=%s Result=%s\n",
-        $job->handle(), $job->function_name(), $job->workload(), $result );
-
-    return $result;
+sub serialization {
+    my ( $self, $res ) = @_;
+    return encode_json $res;
 }
 
 =head2 
