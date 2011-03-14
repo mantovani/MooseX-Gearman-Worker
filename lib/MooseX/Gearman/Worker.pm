@@ -1,7 +1,10 @@
 package MooseX::Gearman::Worker;
 
 use Moose;
+with 'MooseX::Traits';
+
 use Class::MOP::Class;
+use Gearman::XS qw(:constants);
 use Gearman::XS::Worker;
 use JSON;
 
@@ -67,9 +70,17 @@ has 'gearman_port' => ( is => 'rw', isa => PositiveInt, default => '4730' );
 has 'gearman_worker' => (
     is      => 'ro',
     isa     => 'Object',
-    default => sub { Gearman::XS::Worker->new },
-    lazy    => 1
+    default => sub {
+        Gearman::XS::Worker->new;
+    },
+    lazy => 1
 );
+
+sub init {
+    my $self = shift;
+    $self->get_class;
+    $self->register_function;
+}
 
 before 'get_class' => sub {
     my $self = shift;
@@ -87,12 +98,6 @@ Load the class and get the metaclass of the class.
 sub get_class {
     my $self = shift;
     $self->class_methods( $self->_get_class_methods( $self->metaclass ) );
-    $self->add_unserialization_methods(
-        {
-            metaclass     => $self->metaclass,
-            class_methods => [ $self->class_methods ]
-        }
-    );
 }
 
 =head2 get_class_methods
@@ -113,18 +118,51 @@ sub _get_class_methods {
 }
 
 # WORKING ON IT
-sub add_unserialization_methods {
-    my ( $self, $params ) = @_;
-    foreach my $class_method ( @{ $params->{class_methods} } ) {
-        $params->{metaclass}->add_method(
-            ( 'fake_' . $class_method->name ) => \&_unserialization );
+
+before 'register_function' => sub {
+    my $self = shift;
+    $self->gearman_worker->add_server( $self->gearman_host,
+        $self->gearman_port );
+};
+
+sub register_function {
+    my $self = shift;
+    foreach my $method ( $self->class_methods ) {
+        $self->gearman_worker->add_function( $method->name, 0, $method->body,
+            0 );
     }
+
+    my $ret = $self->gearman_worker->add_function( "reverse", 0, \&_unserialization, 0 );
+
 }
+
+after 'register_function' => sub {
+    my $self = shift;
+    while (1) {
+        my $ret = $self->gearman_worker->work();
+        if ( $ret != GEARMAN_SUCCESS ) {
+            print STDERR $self->gearman_worker->error;
+            redo;
+        }
+    }
+};
 
 # AND IT
 sub _unserialization {
-    my $job  = shift;
-    my $self = decode_json $job->workload;
+    use Data::Dumper;
+    print Dumper @_;
+}
+
+sub reverse {
+    my $job = shift;
+
+    my $workload = $job->workload();
+    my $result   = reverse($workload);
+
+    printf( "Job=%s Function_Name=%s Workload=%s Result=%s\n",
+        $job->handle(), $job->function_name(), $job->workload(), $result );
+
+    return $result;
 }
 
 =head2 

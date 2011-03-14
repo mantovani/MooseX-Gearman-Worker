@@ -17,4 +17,4 @@ my $mgw = MooseX::Gearman::Worker->new(
 '9J_NabHV34Fuzb1qIdxpKfQdBmV6eaMGeva5NESfQ7IDCupidoKd_cSGK7MI5Xvl.eLeQKd9YkPOU0M4DsX73A--'
     }
 );
-$mgw->get_class;
+$mgw->init;
