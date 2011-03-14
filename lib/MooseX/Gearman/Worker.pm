@@ -43,22 +43,10 @@ Specify the class attributes.
 =cut
 
 has 'class_name' => ( is => 'rw', isa => 'Str', required => 1 );
-has 'class_params' => (
-    is         => 'rw',
-    isa        => 'HashRef',
-    required   => 1,
-    auto_deref => 1
-);
 
 has 'metaclass' => (
     is  => 'rw',
     isa => 'Object',
-);
-
-has 'class_methods' => (
-    is         => 'rw',
-    isa        => 'ArrayRef[Object]',
-    auto_deref => 1
 );
 
 =head2 gearman attributes
@@ -84,7 +72,7 @@ sub init {
 
 sub get_class {
     my $self = shift;
-    eval { Class::MOP::load_class( $self->class_name, $self->class_params ); };
+    eval { Class::MOP::load_class( $self->class_name ); };
     die $@ if $@;
     $self->metaclass( Class::MOP::get_metaclass_by_name( $self->class_name ) );
 }
@@ -106,7 +94,7 @@ sub register_function {
                 $self->metaclass->find_method_by_name( $arg->{method} )
                   ->execute(
                     $self->metaclass->find_method_by_name('new')
-                      ->execute( $self->class_name, $self->class_params ),
+                      ->execute( $self->class_name, %{ $arg->{class_params} } ),
                     $arg->{args}
                   )
             );
