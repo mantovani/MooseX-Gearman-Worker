@@ -6,7 +6,9 @@ with 'MooseX::Traits';
 use Class::MOP::Class;
 use Gearman::XS qw(:constants);
 use Gearman::XS::Worker;
-use JSON;
+use JSON::XS;
+use KiokuDB;
+use Data::Dumper;
 
 use MooseX::Types::Common::Numeric qw/PositiveInt/;
 use MooseX::Types::Common::String qw/SimpleStr/;
@@ -64,6 +66,19 @@ has 'gearman_worker' => (
     lazy => 1
 );
 
+=head2 KiokuDB
+
+=cut
+
+has 'kiokudb' => (
+    is      => 'ro',
+    isa     => 'Object',
+    default => sub {
+        return KiokuDB->connect( "dbi:SQLite:dbname=kiokudb_tutorial.db", );
+    },
+    lazy => 1,
+);
+
 sub init {
     my $self = shift;
     $self->get_class;
@@ -89,18 +104,18 @@ sub register_function {
         "init_worker",
         0,
         sub {
-            my $arg = $self->unserialization( shift->workload );
-            return $self->serialization(
-                $self->metaclass->find_method_by_name( $arg->{method} )
-                  ->execute(
-                    $self->metaclass->find_method_by_name('new')
-                      ->execute( $self->class_name, %{ $arg->{class_params} } ),
-                    $arg->{args}
-                  )
-            );
+            $self->execute_method( $self->unserialization( shift->workload ) );
         },
         0
     );
+}
+
+sub execute_method {
+    my ( $self, $args ) = @_;
+    my $s = $self->kiokudb->new_scope;
+	my $object = $self->kiokudb->lookup( $args->{object}->{id} );
+	my $method = $args->{method};
+    print Dumper $object->$method;
 }
 
 after 'register_function' => sub {
@@ -109,6 +124,7 @@ after 'register_function' => sub {
         my $ret = $self->gearman_worker->work();
         if ( $ret != GEARMAN_SUCCESS ) {
             print STDERR $self->gearman_worker->error;
+            sleep 2;
             redo;
         }
     }
