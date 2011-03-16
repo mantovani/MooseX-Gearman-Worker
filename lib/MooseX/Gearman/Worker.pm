@@ -15,7 +15,7 @@ use MooseX::Types::Common::String qw/SimpleStr/;
 
 =head1 NAME
 
-MooseX::Gearman::Worker - The great new MooseX::Gearman::Worker!
+MooseX::Gearman::Worker
 
 =head1 VERSION
 
@@ -27,14 +27,19 @@ our $VERSION = '0.01';
 
 =head1 SYNOPSIS
 
-Quick summary of what the module does.
-
-Perhaps a little code snippet.
+How to use.
 
     use MooseX::Gearman::Worker;
 
-    my $foo = MooseX::Gearman::Worker->new();
-    ...
+    my $mgw = MooseX::Gearman::Worker->new(
+        gearman_host => 'myip',
+        gearman_port => 'myport',
+    );
+    $mgw->init;
+
+
+If gearman_host and gearman_port is empy the default value 
+is 127.0.0.1 and 4730.
 
 =cut
 
@@ -66,8 +71,9 @@ has 'kiokudb' => (
     lazy => 1,
 );
 
-
 =head2 init 
+
+	Init the aplication.
 
 =cut
 
@@ -82,8 +88,9 @@ before 'register_function' => sub {
         $self->gearman_port );
 };
 
-
 =head2 register_function
+
+	Register a function at Gearman Worker.
 
 =cut
 
@@ -93,14 +100,16 @@ sub register_function {
         "init_worker",
         0,
         sub {
-            return $self->execute_method( $self->unserialization( shift->workload ) );
+            return $self->execute_method(
+                $self->unserialization( shift->workload ) );
         },
         0
     );
 }
 
-
 =head2 execute_method
+
+	Execute the command gived by Gearman::Client.
 
 =cut
 
@@ -109,7 +118,7 @@ sub execute_method {
     my $s      = $self->kiokudb->new_scope;
     my $object = $self->kiokudb->lookup( $args->{object}->{id} );
     my $method = $args->{method};
-    return encode_json [$object->$method( $args->{args} )];
+    return encode_json [ $object->$method( $args->{args} ) ];
 }
 
 after 'register_function' => sub {
@@ -126,6 +135,8 @@ after 'register_function' => sub {
 
 =head2 unserialization
 
+	Unserialization of the content.
+
 =cut
 
 sub unserialization {
@@ -134,6 +145,8 @@ sub unserialization {
 }
 
 =head2 serialization
+
+	Serialization of the content.
 
 =cut
 
@@ -147,6 +160,7 @@ sub serialization {
 =head1 AUTHOR
 
 Daniel de Oliveira Mantovani, C<< <daniel.oliveira.mantovani at gmail.com> >>
+Eden Cardim, C<< <edenc at gmail.com> >>
 
 =head1 BUGS
 
@@ -190,7 +204,7 @@ L<http://search.cpan.org/dist/MooseX-Gearman-Worker/>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2011 Daniel de Oliveira Mantovani.
+Copyright 2011 Eden Cardim.
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of either: the GNU General Public License as published
