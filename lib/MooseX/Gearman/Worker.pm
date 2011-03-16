@@ -66,6 +66,11 @@ has 'kiokudb' => (
     lazy => 1,
 );
 
+
+=head2 init 
+
+=cut
+
 sub init {
     my $self = shift;
     $self->register_function;
@@ -76,6 +81,11 @@ before 'register_function' => sub {
     $self->gearman_worker->add_server( $self->gearman_host,
         $self->gearman_port );
 };
+
+
+=head2 register_function
+
+=cut
 
 sub register_function {
     my $self = shift;
@@ -89,12 +99,17 @@ sub register_function {
     );
 }
 
+
+=head2 execute_method
+
+=cut
+
 sub execute_method {
     my ( $self, $args ) = @_;
     my $s      = $self->kiokudb->new_scope;
     my $object = $self->kiokudb->lookup( $args->{object}->{id} );
     my $method = $args->{method};
-    return encode_json $object->$method( $args->{args} );
+    return encode_json [$object->$method( $args->{args} )];
 }
 
 after 'register_function' => sub {
@@ -109,10 +124,18 @@ after 'register_function' => sub {
     }
 };
 
+=head2 unserialization
+
+=cut
+
 sub unserialization {
     my ( $self, $json ) = @_;
     return decode_json $json;
 }
+
+=head2 serialization
+
+=cut
 
 sub serialization {
     my ( $self, $res ) = @_;

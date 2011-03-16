@@ -1,3 +1,22 @@
+package Foo;
+
+use Moose;
+
+sub numeric {
+    my ( $self, $arg ) = @_;
+    return $arg;
+}
+
+sub hashref {
+    my ( $self, $arg ) = @_;
+    return { foo => $arg };
+}
+
+sub arrayref {
+    my ( $self, $arg ) = @_;
+    return [ 0 .. $arg ];
+}
+
 package main;
 use MooseX::Gearman::Worker;
 use Gearman::XS qw(:constants);
@@ -5,10 +24,10 @@ use Gearman::XS::Client;
 use JSON::XS;
 use KiokuDB;
 use Yahoo::Answers;
-use Data::Dumper;
-use Test::Simple tests => 1;
 
-#worker
+use Test::Simple tests => 30;
+
+# Init MooseX::Gearman::Worker
 
 my $pid = fork;
 if ( $pid == 0 ) {
@@ -16,8 +35,7 @@ if ( $pid == 0 ) {
     $mgw->init;
 }
 
-#client
-# - Gearman
+# - Gearman Conection
 my $client = new Gearman::XS::Client;
 my $ret = $client->add_server( '127.0.0.1', '4730' );
 if ( $ret != GEARMAN_SUCCESS ) {
@@ -26,17 +44,34 @@ if ( $ret != GEARMAN_SUCCESS ) {
 }
 
 # - KiokuDb
-my $dir = KiokuDB->connect("config/store.yml");
-my $s   = $dir->new_scope;
+my $dir      = KiokuDB->connect("config/store.yml");
+my $s        = $dir->new_scope;
+my $foo      = Foo->new;
+my $class_id = $dir->store($foo);                      #Storing "Foo" class
 
-my $foo = Foo->new;
+# - Test Numeric
 
-my $class_id = $dir->store($foo);
+for ( 1 .. 10 ) {
+    my $serialize = serialize( $class_id, 'numeric', $_ );
+    my $response = decode_json $client->do( "init_worker", $serialize );
+    ok( $response->[0] == $_, "Response Numeric" );
+}
 
-my $serialize = serialize( $class_id, 'test', '1' );
-my $response = decode_json $client->do( "init_worker", $serialize );
+# - Test HashRef
 
-ok( $response == 2, "Response = 2" );
+for ( 1 .. 10 ) {
+    my $serialize = serialize( $class_id, 'hashref', $_ );
+    my $response = decode_json $client->do( "init_worker", $serialize );
+    ok( $response->[0]->{foo} == $_, "Response HashRef" );
+}
+
+# - Test ArrayRef
+
+for ( 1 .. 10 ) {
+    my $serialize = serialize( $class_id, 'arrayref', $_ );
+    my $response = decode_json $client->do( "init_worker", $serialize );
+    ok( scalar @{ $response->[0] } == ( $_ + 1 ), "Response ArrayRef" );
+}
 
 sub serialize {
     my ( $class_id, $method, $args ) = @_;
@@ -47,11 +82,6 @@ sub serialize {
     };
 }
 
-package Foo;
+# Kill MooseX::Gearman::Worker
+my $kill_worker = kill 1, $pid;
 
-use Moose;
-
-sub test {
-    my ( $self, $arg ) = @_;
-    return ( 1 + $arg );
-}
