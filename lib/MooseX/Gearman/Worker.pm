@@ -15,7 +15,7 @@ use MooseX::Types::Common::String qw/SimpleStr/;
 
 =head1 NAME
 
-MooseX::Gearman::Worker
+MooseX::Gearman::Worker - The Great New!
 
 =head1 VERSION
 
