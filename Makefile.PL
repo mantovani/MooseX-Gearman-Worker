@@ -18,6 +18,7 @@ WriteMakefile(
         'Moose'                          => 0,
         'MooseX::Types::Common::Numeric' => 0,
         'MooseX::Types::Common::String'  => 0,
+        'KiokuDB'                        => 0,
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES    => 'MooseX-Gearman-Worker-*' },

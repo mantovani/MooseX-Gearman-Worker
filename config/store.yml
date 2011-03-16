@@ -1,0 +1,4 @@
+backend:
+  class: KiokuDB::Backend::DBI
+  dsn: dbi:Pg:dbname=gearman
+  create: 1

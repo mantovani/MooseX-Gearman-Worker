@@ -38,19 +38,6 @@ Perhaps a little code snippet.
 
 =cut
 
-=head2 class attributes
-
-Specify the class attributes.
-
-=cut
-
-has 'class_name' => ( is => 'rw', isa => 'Str', required => 1 );
-
-has 'metaclass' => (
-    is  => 'rw',
-    isa => 'Object',
-);
-
 =head2 gearman attributes
 
 =cut
@@ -74,22 +61,14 @@ has 'kiokudb' => (
     is      => 'ro',
     isa     => 'Object',
     default => sub {
-        return KiokuDB->connect( "dbi:SQLite:dbname=kiokudb_tutorial.db", );
+        return KiokuDB->connect("config/store.yml");
     },
     lazy => 1,
 );
 
 sub init {
     my $self = shift;
-    $self->get_class;
     $self->register_function;
-}
-
-sub get_class {
-    my $self = shift;
-    eval { Class::MOP::load_class( $self->class_name ); };
-    die $@ if $@;
-    $self->metaclass( Class::MOP::get_metaclass_by_name( $self->class_name ) );
 }
 
 before 'register_function' => sub {
@@ -104,7 +83,7 @@ sub register_function {
         "init_worker",
         0,
         sub {
-            $self->execute_method( $self->unserialization( shift->workload ) );
+            return $self->execute_method( $self->unserialization( shift->workload ) );
         },
         0
     );
@@ -112,10 +91,10 @@ sub register_function {
 
 sub execute_method {
     my ( $self, $args ) = @_;
-    my $s = $self->kiokudb->new_scope;
-	my $object = $self->kiokudb->lookup( $args->{object}->{id} );
-	my $method = $args->{method};
-    print Dumper $object->$method;
+    my $s      = $self->kiokudb->new_scope;
+    my $object = $self->kiokudb->lookup( $args->{object}->{id} );
+    my $method = $args->{method};
+    return encode_json $object->$method( $args->{args} );
 }
 
 after 'register_function' => sub {
