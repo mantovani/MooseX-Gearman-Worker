@@ -34,6 +34,7 @@ How to use.
     my $mgw = MooseX::Gearman::Worker->new(
         gearman_host => 'myip',
         gearman_port => 'myport',
+		class_name => 'MyClass',
     );
     $mgw->init;
 
@@ -42,6 +43,25 @@ If gearman_host and gearman_port is empy the default value
 is 127.0.0.1 and 4730.
 
 =cut
+
+=head2 class attributes
+
+Specify the class attributes.
+
+=cut
+
+has 'class_name' => ( is => 'rw', isa => 'Str', required => 1 );
+
+has 'metaclass' => (
+    is  => 'rw',
+    isa => 'Object',
+);
+
+has 'class_methods' => (
+    is         => 'rw',
+    isa        => 'ArrayRef[Object]',
+    auto_deref => 1
+);
 
 =head2 gearman attributes
 
@@ -79,14 +99,54 @@ has 'kiokudb' => (
 
 sub init {
     my $self = shift;
-    $self->register_function;
+    $self->get_class;
 }
 
-before 'register_function' => sub {
+=head2 get_class
+
+Load the class and get the metaclass of the class.
+
+=cut
+
+before 'get_class' => sub {
+    my $self = shift;
+    eval { Class::MOP::load_class( $self->class_name ); };
+    die $@ if $@;
+    $self->metaclass( Class::MOP::get_metaclass_by_name( $self->class_name ) );
+};
+around 'get_class' => sub {
     my $self = shift;
     $self->gearman_worker->add_server( $self->gearman_host,
         $self->gearman_port );
 };
+
+sub get_class {
+    my $self = shift;
+    $self->class_methods( $self->_get_class_methods( $self->metaclass ) );
+    $self->register_function(
+        {
+            metaclass     => $self->metaclass,
+            class_methods => [ $self->class_methods ]
+        }
+    );
+}
+
+=head2 get_class_methods
+
+Return all methods of the class.
+
+=cut
+
+sub _get_class_methods {
+    my ( $self, $metaclass ) = @_;
+    my @methods = $metaclass->get_all_methods;
+    my @class_methods;
+    foreach my $method (@methods) {
+        push @class_methods, $method
+          if $method->original_package_name eq $self->class_name;
+    }
+    \@class_methods;
+}
 
 =head2 register_function
 
@@ -95,21 +155,23 @@ before 'register_function' => sub {
 =cut
 
 sub register_function {
-    my $self = shift;
-    $self->gearman_worker->add_function(
-        "init_worker",
-        0,
-        sub {
-            return $self->execute_method(
-                $self->unserialization( shift->workload ) );
-        },
-        0
-    );
+    my ( $self, $params ) = @_;
+    foreach my $class_method ( @{ $params->{class_methods} } ) {
+        $self->gearman_worker->add_function(
+            $class_method->name,
+            0,
+            sub {
+                return $self->execute_method(
+                    $self->unserialization( shift->workload ) );
+            },
+            0
+        );
+    }
 }
 
 =head2 execute_method
 
-	Execute the command gived by Gearman::Client.
+  Execute the command gived by Gearman::Client .
 
 =cut
 
@@ -127,7 +189,7 @@ after 'register_function' => sub {
         my $ret = $self->gearman_worker->work();
         if ( $ret != GEARMAN_SUCCESS ) {
             print STDERR $self->gearman_worker->error;
-            sleep 2;
+            print STDERR 'Tryng again';
             redo;
         }
     }
