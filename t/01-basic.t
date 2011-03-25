@@ -1,23 +1,5 @@
-package Foo;
+use lib 'lib';
 
-use Moose;
-
-sub numeric {
-    my ( $self, $arg ) = @_;
-    return $arg;
-}
-
-sub hashref {
-    my ( $self, $arg ) = @_;
-    return { foo => $arg };
-}
-
-sub arrayref {
-    my ( $self, $arg ) = @_;
-    return [ 0 .. $arg ];
-}
-
-package main;
 use MooseX::Gearman::Worker;
 use Gearman::XS qw(:constants);
 use Gearman::XS::Client;
@@ -27,11 +9,15 @@ use Yahoo::Answers;
 
 use Test::Simple tests => 30;
 
+use MooseX::Gearman::Worker::Test;
+
 # Init MooseX::Gearman::Worker
 
 my $pid = fork;
 if ( $pid == 0 ) {
-    my $mgw = MooseX::Gearman::Worker->new();
+    my $mgw =
+      MooseX::Gearman::Worker->new(
+        class_name => 'MooseX::Gearman::Worker::Test' );
     $mgw->init;
 }
 
@@ -46,30 +32,33 @@ if ( $ret != GEARMAN_SUCCESS ) {
 # - KiokuDb
 my $dir      = KiokuDB->connect("config/store.yml");
 my $s        = $dir->new_scope;
-my $foo      = Foo->new;
+my $foo      = MooseX::Gearman::Worker::Test->new;
 my $class_id = $dir->store($foo);                      #Storing "Foo" class
 
 # - Test Numeric
 
 for ( 1 .. 10 ) {
-    my $serialize = serialize( $class_id, 'numeric', $_ );
-    my $response = decode_json $client->do( "init_worker", $serialize );
+    my $exec_method = 'numeric';
+    my $serialize   = serialize( $class_id, $exec_method, $_ );
+    my $response    = decode_json $client->do( $exec_method, $serialize );
     ok( $response->[0] == $_, "Response Numeric" );
 }
 
 # - Test HashRef
 
 for ( 1 .. 10 ) {
-    my $serialize = serialize( $class_id, 'hashref', $_ );
-    my $response = decode_json $client->do( "init_worker", $serialize );
+    my $exec_method = 'hashref';
+    my $serialize   = serialize( $class_id, $exec_method, $_ );
+    my $response    = decode_json $client->do( $exec_method, $serialize );
     ok( $response->[0]->{foo} == $_, "Response HashRef" );
 }
 
 # - Test ArrayRef
 
 for ( 1 .. 10 ) {
-    my $serialize = serialize( $class_id, 'arrayref', $_ );
-    my $response = decode_json $client->do( "init_worker", $serialize );
+    my $exec_method = 'arrayref';
+    my $serialize   = serialize( $class_id, $exec_method, $_ );
+    my $response    = decode_json $client->do( $exec_method, $serialize );
     ok( scalar @{ $response->[0] } == ( $_ + 1 ), "Response ArrayRef" );
 }
 

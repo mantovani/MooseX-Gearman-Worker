@@ -113,11 +113,10 @@ before 'get_class' => sub {
     eval { Class::MOP::load_class( $self->class_name ); };
     die $@ if $@;
     $self->metaclass( Class::MOP::get_metaclass_by_name( $self->class_name ) );
-};
-around 'get_class' => sub {
-    my $self = shift;
+
     $self->gearman_worker->add_server( $self->gearman_host,
         $self->gearman_port );
+
 };
 
 sub get_class {

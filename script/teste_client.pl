@@ -40,8 +40,9 @@ my $class_id = $dir->store($ya);
 # the 2º argument is the "argument inside get_search
 # "get_search(1);"
 
-my $serialize = serialize( $class_id, 'get_search', '1' );
-print Dumper decode_json $client->do( "init_worker", $serialize );
+my $exec_method = 'get_search';
+my $serialize = serialize( $class_id, $exec_method, '1' );
+print Dumper decode_json $client->do( $exec_method, $serialize );
 
 sub serialize {
     my ( $class_id, $method, $args ) = @_;
